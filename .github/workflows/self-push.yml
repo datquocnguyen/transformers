@@ -3,15 +3,7 @@ name: Self-hosted runner (push)
 on:
   push:
     branches:
-      - main
-      - ci_*
-      - ci-*
-    paths:
-      - "src/**"
-      - "tests/**"
-      - ".github/**"
-      - "templates/**"
-      - "utils/**"
+      - test_update_push_ci
   repository_dispatch:
 
 env:
@@ -63,7 +55,7 @@ jobs:
         # If no test to run (so no `test_map.json` file), create a dummy map (empty matrix will fail)
         run: |
           if [ -f test_map.json ]; then
-              keys=$(python3 -c 'import json; fp = open("test_map.json"); test_map = json.load(fp); fp.close(); d = list(test_map.keys()); print(d)')
+              keys=$(python3 -c 'import json; fp = open("test_map.json"); test_map = json.load(fp); fp.close(); d = list(test_map.keys()); d = d[:5]; print(d)')
               test_map=$(python3 -c 'import json; fp = open("test_map.json"); test_map = json.load(fp); fp.close(); print(test_map)')
           else
               keys=$(python3 -c 'keys = ["dummy"]; print(keys)')
@@ -84,7 +76,8 @@ jobs:
       matrix:
         folders: ${{ fromJson(needs.setup.outputs.matrix) }}
         machines: [single-gpu]
-    runs-on: [self-hosted, docker-gpu, '${{ matrix.machines }}']
+    # runs-on: [self-hosted, docker-gpu, '${{ matrix.machines }}']
+    runs-on: [self-hosted, ydshieh, temp, '${{ matrix.machines }}']
     container:
       image: huggingface/transformers-all-latest-gpu
       options: --gpus 0 --shm-size "16gb" --ipc host -v /mnt/cache/.cache/huggingface:/mnt/cache/
@@ -144,7 +137,8 @@ jobs:
       matrix:
         folders: ${{ fromJson(needs.setup.outputs.matrix) }}
         machines: [multi-gpu]
-    runs-on: [self-hosted, docker-gpu, '${{ matrix.machines }}']
+    # runs-on: [self-hosted, docker-gpu, '${{ matrix.machines }}']
+    runs-on: [self-hosted, ydshieh, temp, '${{ matrix.machines }}']
     container:
       image: huggingface/transformers-all-latest-gpu
       # TODO: Should it be `all` or `0`. Same question for places in other workflow files.
@@ -314,7 +308,7 @@ jobs:
         env:
           CI_SLACK_BOT_TOKEN: ${{ secrets.CI_SLACK_BOT_TOKEN }}
           CI_SLACK_CHANNEL_ID: ${{ secrets.CI_SLACK_CHANNEL_ID }}
-          CI_SLACK_CHANNEL_ID_DAILY: ${{ secrets.CI_SLACK_CHANNEL_ID_DAILY }}
+          CI_SLACK_CHANNEL_ID_DAILY: ${{ secrets.CI_SLACK_CHANNEL_DUMMY_TESTS }}
           CI_SLACK_CHANNEL_DUMMY_TESTS: ${{ secrets.CI_SLACK_CHANNEL_DUMMY_TESTS }}
         # We pass `needs.setup.outputs.matrix` as the argument. A processing in `notification_service.py` to change
         # `models/bert` to `models_bert` is required, as the artifact names use `_` instead of `/`.
