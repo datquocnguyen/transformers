@@ -9,7 +9,7 @@ name: Self-hosted runner (scheduled)
 on:
   push:
     branches:
-      - test_update_push_ci_disable
+      - test_update_push_ci
   repository_dispatch:
 
 env:
