@@ -912,7 +912,7 @@ class GPT2Model(GPT2PreTrainedModel):
                     if i == v[-1] and "cuda:" + str(k) != self.last_device:
                         hidden_states = hidden_states.to("cuda:" + str(k + 1))
 
-        # hidden_states = self.ln_f(hidden_states)
+        hidden_states = self.ln_f(hidden_states)
 
         hidden_states = hidden_states.view(output_shape)
         # Add last hidden state
