@@ -16,8 +16,8 @@
 import unittest
 
 import numpy as np
-
 from parameterized import parameterized
+
 from transformers.testing_utils import require_flax, require_tf, require_torch, require_vision
 from transformers.utils.import_utils import is_flax_available, is_tf_available, is_torch_available, is_vision_available
 
@@ -37,6 +37,7 @@ if is_vision_available():
     from transformers.image_transforms import (
         center_crop,
         center_to_corners_format,
+        convert_to_rgb,
         corners_to_center_format,
         get_resize_output_image_size,
         id_to_rgb,
@@ -61,6 +62,8 @@ class ImageTransformsTester(unittest.TestCase):
         [
             ("numpy_float_channels_first", (3, 4, 5), np.float32),
             ("numpy_float_channels_last", (4, 5, 3), np.float32),
+            ("numpy_float_channels_first", (3, 4, 5), np.float64),
+            ("numpy_float_channels_last", (4, 5, 3), np.float64),
             ("numpy_int_channels_first", (3, 4, 5), np.int32),
             ("numpy_uint_channels_first", (3, 4, 5), np.uint8),
         ]
@@ -71,6 +74,53 @@ class ImageTransformsTester(unittest.TestCase):
         pil_image = to_pil_image(image)
         self.assertIsInstance(pil_image, PIL.Image.Image)
         self.assertEqual(pil_image.size, (5, 4))
+
+        # make sure image is correctly rescaled
+        self.assertTrue(np.abs(np.asarray(pil_image)).sum() > 0)
+
+    @parameterized.expand(
+        [
+            ("numpy_float_channels_first", (3, 4, 5), np.float32),
+            ("numpy_float_channels_first", (3, 4, 5), np.float64),
+            ("numpy_float_channels_last", (4, 5, 3), np.float32),
+            ("numpy_float_channels_last", (4, 5, 3), np.float64),
+        ]
+    )
+    @require_vision
+    def test_to_pil_image_from_float(self, name, image_shape, dtype):
+        image = np.random.rand(*image_shape).astype(dtype)
+        pil_image = to_pil_image(image)
+        self.assertIsInstance(pil_image, PIL.Image.Image)
+        self.assertEqual(pil_image.size, (5, 4))
+
+        # make sure image is correctly rescaled
+        self.assertTrue(np.abs(np.asarray(pil_image)).sum() > 0)
+
+        # Make sure that an exception is raised if image is not in [0, 1]
+        image = np.random.randn(*image_shape).astype(dtype)
+        with self.assertRaises(ValueError):
+            to_pil_image(image)
+
+    @require_vision
+    def test_to_pil_image_from_mask(self):
+        # Make sure binary mask remains a binary mask
+        image = np.random.randint(0, 2, (3, 4, 5)).astype(np.uint8)
+        pil_image = to_pil_image(image)
+        self.assertIsInstance(pil_image, PIL.Image.Image)
+        self.assertEqual(pil_image.size, (5, 4))
+
+        np_img = np.asarray(pil_image)
+        self.assertTrue(np_img.min() == 0)
+        self.assertTrue(np_img.max() == 1)
+
+        image = np.random.randint(0, 2, (3, 4, 5)).astype(np.float32)
+        pil_image = to_pil_image(image)
+        self.assertIsInstance(pil_image, PIL.Image.Image)
+        self.assertEqual(pil_image.size, (5, 4))
+
+        np_img = np.asarray(pil_image)
+        self.assertTrue(np_img.min() == 0)
+        self.assertTrue(np_img.max() == 1)
 
     @require_tf
     def test_to_pil_image_from_tensorflow(self):
@@ -161,6 +211,25 @@ class ImageTransformsTester(unittest.TestCase):
         image = np.random.randint(0, 256, (3, 50, 40))
         self.assertEqual(get_resize_output_image_size(image, 20, default_to_square=False, max_size=22), (22, 17))
 
+        # Test correct channel dimension is returned if output size if height == 3
+        # Defaults to input format - channels first
+        image = np.random.randint(0, 256, (3, 18, 97))
+        resized_image = resize(image, (3, 20))
+        self.assertEqual(resized_image.shape, (3, 3, 20))
+
+        # Defaults to input format - channels last
+        image = np.random.randint(0, 256, (18, 97, 3))
+        resized_image = resize(image, (3, 20))
+        self.assertEqual(resized_image.shape, (3, 20, 3))
+
+        image = np.random.randint(0, 256, (3, 18, 97))
+        resized_image = resize(image, (3, 20), data_format="channels_last")
+        self.assertEqual(resized_image.shape, (3, 20, 3))
+
+        image = np.random.randint(0, 256, (18, 97, 3))
+        resized_image = resize(image, (3, 20), data_format="channels_first")
+        self.assertEqual(resized_image.shape, (3, 3, 20))
+
     def test_resize(self):
         image = np.random.randint(0, 256, (3, 224, 224))
 
@@ -174,7 +243,7 @@ class ImageTransformsTester(unittest.TestCase):
         self.assertIsInstance(resized_image, np.ndarray)
         self.assertEqual(resized_image.shape, (30, 40, 3))
 
-        # Check PIL.Image.Image is return if return_numpy=False
+        # Check PIL.Image.Image is returned if return_numpy=False
         resized_image = resize(image, (30, 40), return_numpy=False)
         self.assertIsInstance(resized_image, PIL.Image.Image)
         # PIL size is in (width, height) order
@@ -414,3 +483,32 @@ class ImageTransformsTester(unittest.TestCase):
         self.assertTrue(
             np.allclose(expected_image, pad(image, ((0, 2), (2, 1)), mode="reflect", data_format="channels_last"))
         )
+
+    @require_vision
+    def test_convert_to_rgb(self):
+        # Test that an RGBA image is converted to RGB
+        image = np.array([[[1, 2, 3, 4], [5, 6, 7, 8]]], dtype=np.uint8)
+        pil_image = PIL.Image.fromarray(image)
+        self.assertEqual(pil_image.mode, "RGBA")
+        self.assertEqual(pil_image.size, (2, 1))
+
+        # For the moment, numpy images are returned as is
+        rgb_image = convert_to_rgb(image)
+        self.assertEqual(rgb_image.shape, (1, 2, 4))
+        self.assertTrue(np.allclose(rgb_image, image))
+
+        # And PIL images are converted
+        rgb_image = convert_to_rgb(pil_image)
+        self.assertEqual(rgb_image.mode, "RGB")
+        self.assertEqual(rgb_image.size, (2, 1))
+        self.assertTrue(np.allclose(np.array(rgb_image), np.array([[[1, 2, 3], [5, 6, 7]]], dtype=np.uint8)))
+
+        # Test that a grayscale image is converted to RGB
+        image = np.array([[0, 255]], dtype=np.uint8)
+        pil_image = PIL.Image.fromarray(image)
+        self.assertEqual(pil_image.mode, "L")
+        self.assertEqual(pil_image.size, (2, 1))
+        rgb_image = convert_to_rgb(pil_image)
+        self.assertEqual(rgb_image.mode, "RGB")
+        self.assertEqual(rgb_image.size, (2, 1))
+        self.assertTrue(np.allclose(np.array(rgb_image), np.array([[[0, 0, 0], [255, 255, 255]]], dtype=np.uint8)))

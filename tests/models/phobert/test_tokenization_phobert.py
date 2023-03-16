@@ -26,7 +26,6 @@ from ...test_tokenization_common import TokenizerTesterMixin
 
 @require_tokenizers
 class PhobertTokenizationTest(TokenizerTesterMixin, unittest.TestCase):
-
     tokenizer_class = PhobertTokenizer
     rust_tokenizer_class = PhobertTokenizerFast
     test_rust_tokenizer = True

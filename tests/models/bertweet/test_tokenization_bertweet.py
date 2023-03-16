@@ -26,7 +26,6 @@ from ...test_tokenization_common import TokenizerTesterMixin
 
 @require_tokenizers
 class BertweetTokenizationTest(TokenizerTesterMixin, unittest.TestCase):
-
     tokenizer_class = BertweetTokenizer
     rust_tokenizer_class = BertweetTokenizerFast
     test_rust_tokenizer = True

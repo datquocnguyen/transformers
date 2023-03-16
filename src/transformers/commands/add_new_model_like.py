@@ -23,9 +23,8 @@ from itertools import chain
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Pattern, Tuple, Union
 
-import transformers.models.auto as auto_module
-from transformers.models.auto.configuration_auto import model_type_to_module_name
-
+from ..models import auto as auto_module
+from ..models.auto.configuration_auto import model_type_to_module_name
 from ..utils import is_flax_available, is_tf_available, is_torch_available, logging
 from . import BaseTransformersCLICommand
 
@@ -62,6 +61,9 @@ class ModelPatterns:
             The tokenizer class associated with this model. Will default to `"{model_camel_cased}Config"`.
         tokenizer_class (`str`, *optional*):
             The tokenizer class associated with this model (leave to `None` for models that don't use a tokenizer).
+        image_processor_class (`str`, *optional*):
+            The image processor class associated with this model (leave to `None` for models that don't use an image
+            processor).
         feature_extractor_class (`str`, *optional*):
             The feature extractor class associated with this model (leave to `None` for models that don't use a feature
             extractor).
@@ -77,6 +79,7 @@ class ModelPatterns:
     model_upper_cased: Optional[str] = None
     config_class: Optional[str] = None
     tokenizer_class: Optional[str] = None
+    image_processor_class: Optional[str] = None
     feature_extractor_class: Optional[str] = None
     processor_class: Optional[str] = None
 
@@ -101,6 +104,7 @@ class ModelPatterns:
 ATTRIBUTE_TO_PLACEHOLDER = {
     "config_class": "[CONFIG_CLASS]",
     "tokenizer_class": "[TOKENIZER_CLASS]",
+    "image_processor_class": "[IMAGE_PROCESSOR_CLASS]",
     "feature_extractor_class": "[FEATURE_EXTRACTOR_CLASS]",
     "processor_class": "[PROCESSOR_CLASS]",
     "checkpoint": "[CHECKPOINT]",
@@ -167,6 +171,56 @@ def parse_module_content(content: str) -> List[str]:
         objects.append("\n".join(current_object))
 
     return objects
+
+
+def extract_block(content: str, indent_level: int = 0) -> str:
+    """Return the first block in `content` with the indent level `indent_level`.
+
+    The first line in `content` should be indented at `indent_level` level, otherwise an error will be thrown.
+
+    This method will immediately stop the search when a (non-empty) line with indent level less than `indent_level` is
+    encountered.
+
+    Args:
+        content (`str`): The content to parse
+        indent_level (`int`, *optional*, default to 0): The indent level of the blocks to search for
+
+    Returns:
+        `str`: The first block in `content` with the indent level `indent_level`.
+    """
+    current_object = []
+    lines = content.split("\n")
+    # Doc-styler takes everything between two triple quotes in docstrings, so we need a fake """ here to go with this.
+    end_markers = [")", "]", "}", '"""']
+
+    for idx, line in enumerate(lines):
+        if idx == 0 and indent_level > 0 and not is_empty_line(line) and find_indent(line) != indent_level:
+            raise ValueError(
+                f"When `indent_level > 0`, the first line in `content` should have indent level {indent_level}. Got "
+                f"{find_indent(line)} instead."
+            )
+
+        if find_indent(line) < indent_level and not is_empty_line(line):
+            break
+
+        # End of an object
+        is_valid_object = len(current_object) > 0
+        if (
+            not is_empty_line(line)
+            and not line.endswith(":")
+            and find_indent(line) == indent_level
+            and is_valid_object
+        ):
+            # Closing parts should be included in current object
+            if line.lstrip() in end_markers:
+                current_object.append(line)
+            return "\n".join(current_object)
+        else:
+            current_object.append(line)
+
+    # Add last object
+    if len(current_object) > 0:
+        return "\n".join(current_object)
 
 
 def add_content_to_text(
@@ -283,7 +337,7 @@ def replace_model_patterns(
     # contains the camel-cased named, but will be treated before.
     attributes_to_check = ["config_class"]
     # Add relevant preprocessing classes
-    for attr in ["tokenizer_class", "feature_extractor_class", "processor_class"]:
+    for attr in ["tokenizer_class", "image_processor_class", "feature_extractor_class", "processor_class"]:
         if getattr(old_model_patterns, attr) is not None and getattr(new_model_patterns, attr) is not None:
             attributes_to_check.append(attr)
 
@@ -398,12 +452,53 @@ SPECIAL_PATTERNS = {
 _re_class_func = re.compile(r"^(?:class|def)\s+([^\s:\(]+)\s*(?:\(|\:)", flags=re.MULTILINE)
 
 
+def remove_attributes(obj, target_attr):
+    """Remove `target_attr` in `obj`."""
+    lines = obj.split(os.linesep)
+
+    target_idx = None
+    for idx, line in enumerate(lines):
+        # search for assignment
+        if line.lstrip().startswith(f"{target_attr} = "):
+            target_idx = idx
+            break
+        # search for function/method definition
+        elif line.lstrip().startswith(f"def {target_attr}("):
+            target_idx = idx
+            break
+
+    # target not found
+    if target_idx is None:
+        return obj
+
+    line = lines[target_idx]
+    indent_level = find_indent(line)
+    # forward pass to find the ending of the block (including empty lines)
+    parsed = extract_block("\n".join(lines[target_idx:]), indent_level)
+    num_lines = len(parsed.split("\n"))
+    for idx in range(num_lines):
+        lines[target_idx + idx] = None
+
+    # backward pass to find comments or decorator
+    for idx in range(target_idx - 1, -1, -1):
+        line = lines[idx]
+        if (line.lstrip().startswith("#") or line.lstrip().startswith("@")) and find_indent(line) == indent_level:
+            lines[idx] = None
+        else:
+            break
+
+    new_obj = os.linesep.join([x for x in lines if x is not None])
+
+    return new_obj
+
+
 def duplicate_module(
     module_file: Union[str, os.PathLike],
     old_model_patterns: ModelPatterns,
     new_model_patterns: ModelPatterns,
     dest_file: Optional[str] = None,
     add_copied_from: bool = True,
+    attrs_to_remove: List[str] = None,
 ):
     """
     Create a new module from an existing one and adapting all function and classes names from old patterns to new ones.
@@ -487,8 +582,14 @@ def duplicate_module(
 
         new_objects.append(obj)
 
+    content = "\n".join(new_objects)
+    # Remove some attributes that we don't want to copy to the new file(s)
+    if attrs_to_remove is not None:
+        for attr in attrs_to_remove:
+            content = remove_attributes(content, target_attr=attr)
+
     with open(dest_file, "w", encoding="utf-8") as f:
-        content = f.write("\n".join(new_objects))
+        f.write(content)
 
 
 def filter_framework_files(
@@ -553,6 +654,7 @@ def get_model_files(model_type: str, frameworks: Optional[List[str]] = None) -> 
         f"test_modeling_tf_{module_name}.py",
         f"test_modeling_flax_{module_name}.py",
         f"test_tokenization_{module_name}.py",
+        f"test_image_processing_{module_name}.py",
         f"test_feature_extraction_{module_name}.py",
         f"test_processor_{module_name}.py",
     ]
@@ -687,6 +789,7 @@ def retrieve_info_for_model(model_type, frameworks: Optional[List[str]] = None):
         tokenizer_class = tokenizer_classes[0] if tokenizer_classes[0] is not None else tokenizer_classes[1]
     else:
         tokenizer_class = None
+    image_processor_class = auto_module.image_processing_auto.IMAGE_PROCESSOR_MAPPING_NAMES.get(model_type, None)
     feature_extractor_class = auto_module.feature_extraction_auto.FEATURE_EXTRACTOR_MAPPING_NAMES.get(model_type, None)
     processor_class = auto_module.processing_auto.PROCESSOR_MAPPING_NAMES.get(model_type, None)
 
@@ -731,6 +834,7 @@ def retrieve_info_for_model(model_type, frameworks: Optional[List[str]] = None):
         model_upper_cased=model_upper_cased,
         config_class=config_class,
         tokenizer_class=tokenizer_class,
+        image_processor_class=image_processor_class,
         feature_extractor_class=feature_extractor_class,
         processor_class=processor_class,
     )
@@ -748,14 +852,15 @@ def clean_frameworks_in_init(
 ):
     """
     Removes all the import lines that don't belong to a given list of frameworks or concern tokenizers/feature
-    extractors/processors in an init.
+    extractors/image processors/processors in an init.
 
     Args:
         init_file (`str` or `os.PathLike`): The path to the init to treat.
         frameworks (`List[str]`, *optional*):
            If passed, this will remove all imports that are subject to a framework not in frameworks
         keep_processing (`bool`, *optional*, defaults to `True`):
-            Whether or not to keep the preprocessing (tokenizer, feature extractor, processor) imports in the init.
+            Whether or not to keep the preprocessing (tokenizer, feature extractor, image processor, processor) imports
+            in the init.
     """
     if frameworks is None:
         frameworks = get_default_frameworks()
@@ -808,8 +913,9 @@ def clean_frameworks_in_init(
             idx += 1
         # Otherwise we keep the line, except if it's a tokenizer import and we don't want to keep it.
         elif keep_processing or (
-            re.search('^\s*"(tokenization|processing|feature_extraction)', lines[idx]) is None
-            and re.search("^\s*from .(tokenization|processing|feature_extraction)", lines[idx]) is None
+            re.search('^\s*"(tokenization|processing|feature_extraction|image_processing)', lines[idx]) is None
+            and re.search("^\s*from .(tokenization|processing|feature_extraction|image_processing)", lines[idx])
+            is None
         ):
             new_lines.append(lines[idx])
             idx += 1
@@ -885,6 +991,7 @@ def add_model_to_main_init(
             if not with_processing:
                 processing_classes = [
                     old_model_patterns.tokenizer_class,
+                    old_model_patterns.image_processor_class,
                     old_model_patterns.feature_extractor_class,
                     old_model_patterns.processor_class,
                 ]
@@ -962,6 +1069,7 @@ AUTO_CLASSES_PATTERNS = {
         '        ("{model_type}", "{pretrained_archive_map}"),',
     ],
     "feature_extraction_auto.py": ['        ("{model_type}", "{feature_extractor_class}"),'],
+    "image_processing_auto.py": ['        ("{model_type}", "{image_processor_class}"),'],
     "modeling_auto.py": ['        ("{model_type}", "{any_pt_class}"),'],
     "modeling_tf_auto.py": ['        ("{model_type}", "{any_tf_class}"),'],
     "modeling_flax_auto.py": ['        ("{model_type}", "{any_flax_class}"),'],
@@ -995,6 +1103,14 @@ def add_model_to_auto_classes(
                     )
             elif "{config_class}" in pattern:
                 new_patterns.append(pattern.replace("{config_class}", old_model_patterns.config_class))
+            elif "{image_processor_class}" in pattern:
+                if (
+                    old_model_patterns.image_processor_class is not None
+                    and new_model_patterns.image_processor_class is not None
+                ):
+                    new_patterns.append(
+                        pattern.replace("{image_processor_class}", old_model_patterns.image_processor_class)
+                    )
             elif "{feature_extractor_class}" in pattern:
                 if (
                     old_model_patterns.feature_extractor_class is not None
@@ -1121,6 +1237,10 @@ def duplicate_doc_file(
                 # We only add the tokenizer if necessary
                 if old_model_patterns.tokenizer_class != new_model_patterns.tokenizer_class:
                     new_blocks.append(new_block)
+            elif "ImageProcessor" in block_class:
+                # We only add the image processor if necessary
+                if old_model_patterns.image_processor_class != new_model_patterns.image_processor_class:
+                    new_blocks.append(new_block)
             elif "FeatureExtractor" in block_class:
                 # We only add the feature extractor if necessary
                 if old_model_patterns.feature_extractor_class != new_model_patterns.feature_extractor_class:
@@ -1182,7 +1302,7 @@ def create_new_model_like(
         )
 
     keep_old_processing = True
-    for processing_attr in ["feature_extractor_class", "processor_class", "tokenizer_class"]:
+    for processing_attr in ["image_processor_class", "feature_extractor_class", "processor_class", "tokenizer_class"]:
         if getattr(old_model_patterns, processing_attr) != getattr(new_model_patterns, processing_attr):
             keep_old_processing = False
 
@@ -1198,7 +1318,10 @@ def create_new_model_like(
         files_to_adapt = [
             f
             for f in files_to_adapt
-            if "tokenization" not in str(f) and "processing" not in str(f) and "feature_extraction" not in str(f)
+            if "tokenization" not in str(f)
+            and "processing" not in str(f)
+            and "feature_extraction" not in str(f)
+            and "image_processing" not in str(f)
         ]
 
     os.makedirs(module_folder, exist_ok=True)
@@ -1236,7 +1359,10 @@ def create_new_model_like(
         files_to_adapt = [
             f
             for f in files_to_adapt
-            if "tokenization" not in str(f) and "processor" not in str(f) and "feature_extraction" not in str(f)
+            if "tokenization" not in str(f)
+            and "processor" not in str(f)
+            and "feature_extraction" not in str(f)
+            and "image_processing" not in str(f)
         ]
 
     def disable_fx_test(filename: Path) -> bool:
@@ -1265,6 +1391,7 @@ def create_new_model_like(
             new_model_patterns,
             dest_file=dest_file,
             add_copied_from=False,
+            attrs_to_remove=["pipeline_model_mapping", "is_pipeline_test_to_skip"],
         )
         disabled_fx_test = disabled_fx_test | disable_fx_test(dest_file)
 
@@ -1458,6 +1585,7 @@ def get_user_input():
 
     old_model_info = retrieve_info_for_model(old_model_type)
     old_tokenizer_class = old_model_info["model_patterns"].tokenizer_class
+    old_image_processor_class = old_model_info["model_patterns"].image_processor_class
     old_feature_extractor_class = old_model_info["model_patterns"].feature_extractor_class
     old_processor_class = old_model_info["model_patterns"].processor_class
     old_frameworks = old_model_info["frameworks"]
@@ -1497,7 +1625,9 @@ def get_user_input():
     )
 
     old_processing_classes = [
-        c for c in [old_feature_extractor_class, old_tokenizer_class, old_processor_class] if c is not None
+        c
+        for c in [old_image_processor_class, old_feature_extractor_class, old_tokenizer_class, old_processor_class]
+        if c is not None
     ]
     old_processing_classes = ", ".join(old_processing_classes)
     keep_processing = get_user_field(
@@ -1506,6 +1636,7 @@ def get_user_input():
         fallback_message="Please answer yes/no, y/n, true/false or 1/0. ",
     )
     if keep_processing:
+        image_processor_class = old_image_processor_class
         feature_extractor_class = old_feature_extractor_class
         processor_class = old_processor_class
         tokenizer_class = old_tokenizer_class
@@ -1517,6 +1648,13 @@ def get_user_input():
             )
         else:
             tokenizer_class = None
+        if old_image_processor_class is not None:
+            image_processor_class = get_user_field(
+                "What will be the name of the image processor class for this model? ",
+                default_value=f"{model_camel_cased}ImageProcessor",
+            )
+        else:
+            image_processor_class = None
         if old_feature_extractor_class is not None:
             feature_extractor_class = get_user_field(
                 "What will be the name of the feature extractor class for this model? ",
@@ -1541,6 +1679,7 @@ def get_user_input():
         model_upper_cased=model_upper_cased,
         config_class=config_class,
         tokenizer_class=tokenizer_class,
+        image_processor_class=image_processor_class,
         feature_extractor_class=feature_extractor_class,
         processor_class=processor_class,
     )
