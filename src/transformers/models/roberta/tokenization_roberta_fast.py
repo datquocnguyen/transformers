@@ -85,7 +85,7 @@ class RobertaTokenizerFast(PreTrainedTokenizerFast):
     >>> from transformers import RobertaTokenizerFast
     >>> tokenizer = RobertaTokenizerFast.from_pretrained("roberta-base")
     >>> tokenizer("Hello world")['input_ids']
-    [0, 31414, 232, 328, 2]
+    [0, 31414, 232, 2]
     >>> tokenizer(" Hello world")['input_ids']
     [0, 20920, 232, 2]
     ```
@@ -173,7 +173,7 @@ class RobertaTokenizerFast(PreTrainedTokenizerFast):
         mask_token="<mask>",
         add_prefix_space=False,
         trim_offsets=True,
-        **kwargs
+        **kwargs,
     ):
         super().__init__(
             vocab_file,

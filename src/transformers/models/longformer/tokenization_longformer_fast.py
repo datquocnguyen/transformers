@@ -100,7 +100,7 @@ class LongformerTokenizerFast(PreTrainedTokenizerFast):
     >>> from transformers import LongformerTokenizerFast
     >>> tokenizer = LongformerTokenizerFast.from_pretrained("allenai/longformer-base-4096")
     >>> tokenizer("Hello world")['input_ids']
-    [0, 31414, 232, 328, 2]
+    [0, 31414, 232, 2]
     >>> tokenizer(" Hello world")['input_ids']
     [0, 20920, 232, 2]
     ```
@@ -188,7 +188,7 @@ class LongformerTokenizerFast(PreTrainedTokenizerFast):
         mask_token="<mask>",
         add_prefix_space=False,
         trim_offsets=True,
-        **kwargs
+        **kwargs,
     ):
         super().__init__(
             vocab_file,

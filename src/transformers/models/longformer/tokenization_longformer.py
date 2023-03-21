@@ -124,7 +124,7 @@ class LongformerTokenizer(PreTrainedTokenizer):
     >>> from transformers import LongformerTokenizer
     >>> tokenizer = LongformerTokenizer.from_pretrained("allenai/longformer-base-4096")
     >>> tokenizer("Hello world")['input_ids']
-    [0, 31414, 232, 328, 2]
+    [0, 31414, 232, 2]
     >>> tokenizer(" Hello world")['input_ids']
     [0, 20920, 232, 2]
     ```
@@ -207,7 +207,7 @@ class LongformerTokenizer(PreTrainedTokenizer):
         pad_token="<pad>",
         mask_token="<mask>",
         add_prefix_space=False,
-        **kwargs
+        **kwargs,
     ):
         bos_token = AddedToken(bos_token, lstrip=False, rstrip=False) if isinstance(bos_token, str) else bos_token
         eos_token = AddedToken(eos_token, lstrip=False, rstrip=False) if isinstance(eos_token, str) else eos_token
