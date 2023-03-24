@@ -253,7 +253,7 @@ else:
                     None,
                 ),
             ),
-            ("phobert", ("PhobertTokenizer", "PhobertTokenizerFast" if is_tokenizers_available() else None)),
+            ("phobert", ("PhobertTokenizer", None)),
             ("plbart", ("PLBartTokenizer" if is_sentencepiece_available() else None, None)),
             ("prophetnet", ("ProphetNetTokenizer", None)),
             ("qdqbert", ("BertTokenizer", "BertTokenizerFast" if is_tokenizers_available() else None)),
