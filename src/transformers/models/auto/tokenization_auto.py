@@ -253,7 +253,7 @@ else:
                     None,
                 ),
             ),
-            ("phobert", ("PhobertTokenizer", None)),
+            ("phobert", ("PhobertTokenizer", "PhobertTokenizerFast" if is_tokenizers_available() else None)),
             ("pix2struct", ("T5Tokenizer", "T5TokenizerFast" if is_tokenizers_available() else None)),
             ("plbart", ("PLBartTokenizer" if is_sentencepiece_available() else None, None)),
             ("prophetnet", ("ProphetNetTokenizer", None)),
