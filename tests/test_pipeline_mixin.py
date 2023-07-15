@@ -17,6 +17,7 @@ import copy
 import json
 import os
 import random
+import unittest
 from pathlib import Path
 
 from transformers.testing_utils import (
@@ -40,6 +41,7 @@ from .pipelines.test_pipelines_fill_mask import FillMaskPipelineTests
 from .pipelines.test_pipelines_image_classification import ImageClassificationPipelineTests
 from .pipelines.test_pipelines_image_segmentation import ImageSegmentationPipelineTests
 from .pipelines.test_pipelines_image_to_text import ImageToTextPipelineTests
+from .pipelines.test_pipelines_mask_generation import MaskGenerationPipelineTests
 from .pipelines.test_pipelines_object_detection import ObjectDetectionPipelineTests
 from .pipelines.test_pipelines_question_answering import QAPipelineTests
 from .pipelines.test_pipelines_summarization import SummarizationPipelineTests
@@ -68,6 +70,7 @@ pipeline_test_mapping = {
     "image-classification": {"test": ImageClassificationPipelineTests},
     "image-segmentation": {"test": ImageSegmentationPipelineTests},
     "image-to-text": {"test": ImageToTextPipelineTests},
+    "mask-generation": {"test": MaskGenerationPipelineTests},
     "object-detection": {"test": ObjectDetectionPipelineTests},
     "question-answering": {"test": QAPipelineTests},
     "summarization": {"test": SummarizationPipelineTests},
@@ -93,7 +96,14 @@ for task, task_info in pipeline_test_mapping.items():
     }
 
 
-TINY_MODEL_SUMMARY_FILE_PATH = os.path.join(Path(__file__).parent.parent, "tests/utils/tiny_model_summary.json")
+# The default value `hf-internal-testing` is for running the pipeline testing against the tiny models on the Hub.
+# For debugging purpose, we can specify a local path which is the `output_path` argument of a previous run of
+# `utils/create_dummy_models.py`.
+TRANSFORMERS_TINY_MODEL_PATH = os.environ.get("TRANSFORMERS_TINY_MODEL_PATH", "hf-internal-testing")
+if TRANSFORMERS_TINY_MODEL_PATH == "hf-internal-testing":
+    TINY_MODEL_SUMMARY_FILE_PATH = os.path.join(Path(__file__).parent.parent, "tests/utils/tiny_model_summary.json")
+else:
+    TINY_MODEL_SUMMARY_FILE_PATH = os.path.join(TRANSFORMERS_TINY_MODEL_PATH, "reports", "tiny_model_summary.json")
 with open(TINY_MODEL_SUMMARY_FILE_PATH) as fp:
     tiny_model_summary = json.load(fp)
 
@@ -146,12 +156,15 @@ class PipelineTesterMixin:
             if model_arch_name in tiny_model_summary:
                 tokenizer_names = tiny_model_summary[model_arch_name]["tokenizer_classes"]
                 processor_names = tiny_model_summary[model_arch_name]["processor_classes"]
-                commit = tiny_model_summary[model_arch_name]["sha"]
+                if "sha" in tiny_model_summary[model_arch_name]:
+                    commit = tiny_model_summary[model_arch_name]["sha"]
             # Adding `None` (if empty) so we can generate tests
             tokenizer_names = [None] if len(tokenizer_names) == 0 else tokenizer_names
             processor_names = [None] if len(processor_names) == 0 else processor_names
 
             repo_name = f"tiny-random-{model_arch_name}"
+            if TRANSFORMERS_TINY_MODEL_PATH != "hf-internal-testing":
+                repo_name = model_arch_name
 
             self.run_model_pipeline_tests(
                 task, repo_name, model_architecture, tokenizer_names, processor_names, commit
@@ -210,7 +223,10 @@ class PipelineTesterMixin:
             processor_name (`str`):
                 The name of a subclass of `BaseImageProcessor` or `FeatureExtractionMixin`.
         """
-        repo_id = f"hf-internal-testing/{repo_name}"
+        repo_id = f"{TRANSFORMERS_TINY_MODEL_PATH}/{repo_name}"
+        if TRANSFORMERS_TINY_MODEL_PATH != "hf-internal-testing":
+            model_type = model_architecture.config_class.model_type
+            repo_id = os.path.join(TRANSFORMERS_TINY_MODEL_PATH, model_type, repo_name)
 
         tokenizer = None
         if tokenizer_name is not None:
@@ -245,6 +261,15 @@ class PipelineTesterMixin:
             logger.warning(
                 f"{self.__class__.__name__}::test_pipeline_{task.replace('-', '_')} is skipped: Could not find or load "
                 f"the model from `{repo_id}` with `{model_architecture}`."
+            )
+            return
+
+        pipeline_test_class_name = pipeline_test_mapping[task]["test"].__name__
+        if self.is_pipeline_test_to_skip_more(pipeline_test_class_name, model.config, model, tokenizer, processor):
+            logger.warning(
+                f"{self.__class__.__name__}::test_pipeline_{task.replace('-', '_')} is skipped: test is "
+                f"currently known to fail for: model `{model_architecture.__name__}` | tokenizer "
+                f"`{tokenizer_name}` | processor `{processor_name}`."
             )
             return
 
@@ -290,7 +315,6 @@ class PipelineTesterMixin:
         run_batch_test(pipeline, examples)
 
     @is_pipeline_test
-    @require_torch
     def test_pipeline_audio_classification(self):
         self.run_task_tests(task="audio-classification")
 
@@ -341,6 +365,13 @@ class PipelineTesterMixin:
     @require_vision
     def test_pipeline_image_to_text(self):
         self.run_task_tests(task="image-to-text")
+
+    @unittest.skip(reason="`run_pipeline_test` is currently not implemented.")
+    @is_pipeline_test
+    @require_vision
+    @require_torch
+    def test_pipeline_mask_generation(self):
+        self.run_task_tests(task="mask-generation")
 
     @is_pipeline_test
     @require_vision
@@ -415,9 +446,37 @@ class PipelineTesterMixin:
     def test_pipeline_zero_shot_object_detection(self):
         self.run_task_tests(task="zero-shot-object-detection")
 
+    # This contains the test cases to be skipped without model architecture being involved.
     def is_pipeline_test_to_skip(
         self, pipeline_test_casse_name, config_class, model_architecture, tokenizer_name, processor_name
     ):
+        """Skip some tests based on the classes or their names without the instantiated objects.
+
+        This is to avoid calling `from_pretrained` (so reducing the runtime) if we already know the tests will fail.
+        """
+        # No fix is required for this case.
+        if (
+            pipeline_test_casse_name == "DocumentQuestionAnsweringPipelineTests"
+            and tokenizer_name is not None
+            and not tokenizer_name.endswith("Fast")
+        ):
+            # `DocumentQuestionAnsweringPipelineTests` requires a fast tokenizer.
+            return True
+
+        return False
+
+    def is_pipeline_test_to_skip_more(self, pipeline_test_casse_name, config, model, tokenizer, processor):  # noqa
+        """Skip some more tests based on the information from the instantiated objects."""
+        # No fix is required for this case.
+        if (
+            pipeline_test_casse_name == "QAPipelineTests"
+            and tokenizer is not None
+            and getattr(tokenizer, "pad_token", None) is None
+            and not tokenizer.__class__.__name__.endswith("Fast")
+        ):
+            # `QAPipelineTests` doesn't work with a slow tokenizer that has no pad token.
+            return True
+
         return False
 
 

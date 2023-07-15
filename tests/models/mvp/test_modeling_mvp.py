@@ -420,9 +420,10 @@ class MvpModelTest(ModelTesterMixin, GenerationTesterMixin, PipelineTesterMixin,
             "fill-mask": MvpForConditionalGeneration,
             "question-answering": MvpForQuestionAnswering,
             "summarization": MvpForConditionalGeneration,
-            "text2text-generation": MvpForConditionalGeneration,
             "text-classification": MvpForSequenceClassification,
             "text-generation": MvpForCausalLM,
+            "text2text-generation": MvpForConditionalGeneration,
+            "translation": MvpForConditionalGeneration,
             "zero-shot": MvpForSequenceClassification,
         }
         if is_torch_available()
@@ -817,3 +818,7 @@ class MvpStandaloneDecoderModelTest(ModelTesterMixin, GenerationTesterMixin, uni
     def test_retain_grad_hidden_states_attentions(self):
         # decoder cannot keep gradients
         return
+
+    @unittest.skip("The model doesn't support left padding")  # and it's not used enough to be worth fixing :)
+    def test_left_padding_compatibility(self):
+        pass

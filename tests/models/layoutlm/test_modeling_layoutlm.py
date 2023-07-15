@@ -246,20 +246,6 @@ class LayoutLMModelTest(ModelTesterMixin, PipelineTesterMixin, unittest.TestCase
     )
     fx_compatible = True
 
-    # TODO: Fix the failed tests
-    def is_pipeline_test_to_skip(
-        self, pipeline_test_casse_name, config_class, model_architecture, tokenizer_name, processor_name
-    ):
-        if (
-            pipeline_test_casse_name == "DocumentQuestionAnsweringPipelineTests"
-            and tokenizer_name is not None
-            and not tokenizer_name.endswith("Fast")
-        ):
-            # This pipeline uses `sequence_ids()` which is only available for fast tokenizers.
-            return True
-
-        return False
-
     def setUp(self):
         self.model_tester = LayoutLMModelTester(self)
         self.config_tester = ConfigTester(self, config_class=LayoutLMConfig, hidden_size=37)
@@ -292,6 +278,10 @@ class LayoutLMModelTest(ModelTesterMixin, PipelineTesterMixin, unittest.TestCase
     def test_for_question_answering(self):
         config_and_inputs = self.model_tester.prepare_config_and_inputs()
         self.model_tester.create_and_check_for_question_answering(*config_and_inputs)
+
+    @unittest.skip("Will be fixed soon by reducing the size of the model used for common tests.")
+    def test_model_is_small(self):
+        pass
 
 
 def prepare_layoutlm_batch_inputs():

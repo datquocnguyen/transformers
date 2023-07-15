@@ -224,9 +224,10 @@ class PLBartModelTest(ModelTesterMixin, GenerationTesterMixin, PipelineTesterMix
             "conversational": PLBartForConditionalGeneration,
             "feature-extraction": PLBartModel,
             "summarization": PLBartForConditionalGeneration,
-            "text2text-generation": PLBartForConditionalGeneration,
             "text-classification": PLBartForSequenceClassification,
             "text-generation": PLBartForCausalLM,
+            "text2text-generation": PLBartForConditionalGeneration,
+            "translation": PLBartForConditionalGeneration,
             "zero-shot": PLBartForSequenceClassification,
         }
         if is_torch_available()
@@ -657,3 +658,7 @@ class PLBartStandaloneDecoderModelTest(ModelTesterMixin, GenerationTesterMixin, 
     def test_retain_grad_hidden_states_attentions(self):
         # decoder cannot keep gradients
         return
+
+    @unittest.skip("The model doesn't support left padding")  # and it's not used enough to be worth fixing :)
+    def test_left_padding_compatibility(self):
+        pass

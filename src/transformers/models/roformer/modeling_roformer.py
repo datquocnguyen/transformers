@@ -259,11 +259,6 @@ class RoFormerSelfAttention(nn.Module):
             key_layer = self.transpose_for_scores(self.key(encoder_hidden_states))
             value_layer = self.transpose_for_scores(self.value(encoder_hidden_states))
             attention_mask = encoder_attention_mask
-        elif past_key_value is not None:
-            key_layer = self.transpose_for_scores(self.key(hidden_states))
-            value_layer = self.transpose_for_scores(self.value(hidden_states))
-            key_layer = torch.cat([past_key_value[0], key_layer], dim=2)
-            value_layer = torch.cat([past_key_value[1], value_layer], dim=2)
         else:
             key_layer = self.transpose_for_scores(self.key(hidden_states))
             value_layer = self.transpose_for_scores(self.value(hidden_states))
@@ -276,6 +271,9 @@ class RoFormerSelfAttention(nn.Module):
                     query_layer, key_layer = self.apply_rotary_position_embeddings(
                         sinusoidal_pos, query_layer, key_layer
                     )
+            if past_key_value is not None:
+                key_layer = torch.cat([past_key_value[0], key_layer], dim=2)
+                value_layer = torch.cat([past_key_value[1], value_layer], dim=2)
         if self.is_decoder:
             # if cross_attention save Tuple(torch.Tensor, torch.Tensor) of all cross attention key/value_states.
             # Further calls to cross_attention layer can then reuse all cross-attention
@@ -566,8 +564,10 @@ class RoFormerEncoder(nn.Module):
         all_self_attentions = () if output_attentions else None
         all_cross_attentions = () if output_attentions and self.config.add_cross_attention else None
 
+        past_key_values_length = past_key_values[0][0].shape[2] if past_key_values is not None else 0
+
         # [sequence_length, embed_size_per_head] -> [batch_size, num_heads, sequence_length, embed_size_per_head]
-        sinusoidal_pos = self.embed_positions(hidden_states.shape[:-1])[None, None, :, :]
+        sinusoidal_pos = self.embed_positions(hidden_states.shape[:-1], past_key_values_length)[None, None, :, :]
 
         next_decoder_cache = () if use_cache else None
         for i, layer_module in enumerate(self.layer):
@@ -696,11 +696,6 @@ class RoFormerPreTrainedModel(PreTrainedModel):
     load_tf_weights = load_tf_weights_in_roformer
     base_model_prefix = "roformer"
     supports_gradient_checkpointing = True
-    _keys_to_ignore_on_load_missing = []
-    _keys_to_ignore_on_load_unexpected = [
-        r"roformer.embeddings_project.weight",
-        r"roformer.embeddings_project.bias",
-    ]
 
     def _init_weights(self, module):
         """Initialize the weights"""
@@ -952,7 +947,7 @@ class RoFormerModel(RoFormerPreTrainedModel):
 
 @add_start_docstrings("""RoFormer Model with a `language modeling` head on top.""", ROFORMER_START_DOCSTRING)
 class RoFormerForMaskedLM(RoFormerPreTrainedModel):
-    _keys_to_ignore_on_load_missing = ["cls.predictions.decoder.bias", "cls.predictions.decoder.weight"]
+    _tied_weights_keys = ["cls.predictions.decoder.bias", "cls.predictions.decoder.weight"]
 
     def __init__(self, config):
         super().__init__(config)
@@ -1054,7 +1049,7 @@ class RoFormerForMaskedLM(RoFormerPreTrainedModel):
     """RoFormer Model with a `language modeling` head on top for CLM fine-tuning.""", ROFORMER_START_DOCSTRING
 )
 class RoFormerForCausalLM(RoFormerPreTrainedModel):
-    _keys_to_ignore_on_load_missing = ["cls.predictions.decoder.bias", "cls.predictions.decoder.weight"]
+    _tied_weights_keys = ["cls.predictions.decoder.bias", "cls.predictions.decoder.weight"]
 
     def __init__(self, config):
         super().__init__(config)

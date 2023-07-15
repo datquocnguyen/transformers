@@ -34,6 +34,7 @@ TF_MODEL_MAPPING_NAMES = OrderedDict(
         ("bert", "TFBertModel"),
         ("blenderbot", "TFBlenderbotModel"),
         ("blenderbot-small", "TFBlenderbotSmallModel"),
+        ("blip", "TFBlipModel"),
         ("camembert", "TFCamembertModel"),
         ("clip", "TFCLIPModel"),
         ("convbert", "TFConvBertModel"),
@@ -46,6 +47,7 @@ TF_MODEL_MAPPING_NAMES = OrderedDict(
         ("deit", "TFDeiTModel"),
         ("distilbert", "TFDistilBertModel"),
         ("dpr", "TFDPRQuestionEncoder"),
+        ("efficientformer", "TFEfficientFormerModel"),
         ("electra", "TFElectraModel"),
         ("esm", "TFEsmModel"),
         ("flaubert", "TFFlaubertModel"),
@@ -75,6 +77,7 @@ TF_MODEL_MAPPING_NAMES = OrderedDict(
         ("roberta", "TFRobertaModel"),
         ("roberta-prelayernorm", "TFRobertaPreLayerNormModel"),
         ("roformer", "TFRoFormerModel"),
+        ("sam", "TFSamModel"),
         ("segformer", "TFSegformerModel"),
         ("speech_to_text", "TFSpeech2TextModel"),
         ("swin", "TFSwinModel"),
@@ -200,6 +203,10 @@ TF_MODEL_FOR_IMAGE_CLASSIFICATION_MAPPING_NAMES = OrderedDict(
         ("cvt", "TFCvtForImageClassification"),
         ("data2vec-vision", "TFData2VecVisionForImageClassification"),
         ("deit", ("TFDeiTForImageClassification", "TFDeiTForImageClassificationWithTeacher")),
+        (
+            "efficientformer",
+            ("TFEfficientFormerForImageClassification", "TFEfficientFormerForImageClassificationWithTeacher"),
+        ),
         ("mobilevit", "TFMobileViTForImageClassification"),
         ("regnet", "TFRegNetForImageClassification"),
         ("resnet", "TFResNetForImageClassification"),
@@ -213,6 +220,7 @@ TF_MODEL_FOR_IMAGE_CLASSIFICATION_MAPPING_NAMES = OrderedDict(
 TF_MODEL_FOR_ZERO_SHOT_IMAGE_CLASSIFICATION_MAPPING_NAMES = OrderedDict(
     [
         # Model for Zero Shot Image Classification mapping
+        ("blip", "TFBlipModel"),
         ("clip", "TFCLIPModel"),
     ]
 )
@@ -229,6 +237,7 @@ TF_MODEL_FOR_SEMANTIC_SEGMENTATION_MAPPING_NAMES = OrderedDict(
 
 TF_MODEL_FOR_VISION_2_SEQ_MAPPING_NAMES = OrderedDict(
     [
+        ("blip", "TFBlipForConditionalGeneration"),
         ("vision-encoder-decoder", "TFVisionEncoderDecoderModel"),
     ]
 )
@@ -348,6 +357,7 @@ TF_MODEL_FOR_QUESTION_ANSWERING_MAPPING_NAMES = OrderedDict(
         ("xlnet", "TFXLNetForQuestionAnsweringSimple"),
     ]
 )
+TF_MODEL_FOR_AUDIO_CLASSIFICATION_MAPPING_NAMES = OrderedDict([("wav2vec2", "TFWav2Vec2ForSequenceClassification")])
 
 TF_MODEL_FOR_DOCUMENT_QUESTION_ANSWERING_MAPPING_NAMES = OrderedDict(
     [
@@ -422,6 +432,33 @@ TF_MODEL_FOR_NEXT_SENTENCE_PREDICTION_MAPPING_NAMES = OrderedDict(
         ("mobilebert", "TFMobileBertForNextSentencePrediction"),
     ]
 )
+TF_MODEL_FOR_MASK_GENERATION_MAPPING_NAMES = OrderedDict(
+    [
+        ("sam", "TFSamModel"),
+    ]
+)
+TF_MODEL_FOR_TEXT_ENCODING_MAPPING_NAMES = OrderedDict(
+    [
+        ("albert", "TFAlbertModel"),
+        ("bert", "TFBertModel"),
+        ("convbert", "TFConvBertModel"),
+        ("deberta", "TFDebertaModel"),
+        ("deberta-v2", "TFDebertaV2Model"),
+        ("distilbert", "TFDistilBertModel"),
+        ("electra", "TFElectraModel"),
+        ("flaubert", "TFFlaubertModel"),
+        ("longformer", "TFLongformerModel"),
+        ("mobilebert", "TFMobileBertModel"),
+        ("mt5", "TFMT5EncoderModel"),
+        ("rembert", "TFRemBertModel"),
+        ("roberta", "TFRobertaModel"),
+        ("roberta-prelayernorm", "TFRobertaPreLayerNormModel"),
+        ("roformer", "TFRoFormerModel"),
+        ("t5", "TFT5EncoderModel"),
+        ("xlm", "TFXLMModel"),
+        ("xlm-roberta", "TFXLMRobertaModel"),
+    ]
+)
 
 TF_MODEL_MAPPING = _LazyAutoMapping(CONFIG_MAPPING_NAMES, TF_MODEL_MAPPING_NAMES)
 TF_MODEL_FOR_PRETRAINING_MAPPING = _LazyAutoMapping(CONFIG_MAPPING_NAMES, TF_MODEL_FOR_PRETRAINING_MAPPING_NAMES)
@@ -468,6 +505,23 @@ TF_MODEL_FOR_MULTIPLE_CHOICE_MAPPING = _LazyAutoMapping(
 TF_MODEL_FOR_NEXT_SENTENCE_PREDICTION_MAPPING = _LazyAutoMapping(
     CONFIG_MAPPING_NAMES, TF_MODEL_FOR_NEXT_SENTENCE_PREDICTION_MAPPING_NAMES
 )
+TF_MODEL_FOR_AUDIO_CLASSIFICATION_MAPPING = _LazyAutoMapping(
+    CONFIG_MAPPING_NAMES, TF_MODEL_FOR_AUDIO_CLASSIFICATION_MAPPING_NAMES
+)
+
+TF_MODEL_FOR_MASK_GENERATION_MAPPING = _LazyAutoMapping(
+    CONFIG_MAPPING_NAMES, TF_MODEL_FOR_MASK_GENERATION_MAPPING_NAMES
+)
+
+TF_MODEL_FOR_TEXT_ENCODING_MAPPING = _LazyAutoMapping(CONFIG_MAPPING_NAMES, TF_MODEL_FOR_TEXT_ENCODING_MAPPING_NAMES)
+
+
+class TFAutoModelForMaskGeneration(_BaseAutoModelClass):
+    _model_mapping = TF_MODEL_FOR_MASK_GENERATION_MAPPING
+
+
+class TFAutoModelForTextEncoding(_BaseAutoModelClass):
+    _model_mapping = TF_MODEL_FOR_TEXT_ENCODING_MAPPING
 
 
 class TFAutoModel(_BaseAutoModelClass):
@@ -475,6 +529,15 @@ class TFAutoModel(_BaseAutoModelClass):
 
 
 TFAutoModel = auto_class_update(TFAutoModel)
+
+
+class TFAutoModelForAudioClassification(_BaseAutoModelClass):
+    _model_mapping = TF_MODEL_FOR_AUDIO_CLASSIFICATION_MAPPING
+
+
+TFAutoModelForAudioClassification = auto_class_update(
+    TFAutoModelForAudioClassification, head_doc="audio classification"
+)
 
 
 class TFAutoModelForPreTraining(_BaseAutoModelClass):
@@ -530,7 +593,7 @@ class TFAutoModelForSemanticSegmentation(_BaseAutoModelClass):
     _model_mapping = TF_MODEL_FOR_SEMANTIC_SEGMENTATION_MAPPING
 
 
-TF_AutoModelForSemanticSegmentation = auto_class_update(
+TFAutoModelForSemanticSegmentation = auto_class_update(
     TFAutoModelForSemanticSegmentation, head_doc="semantic segmentation"
 )
 

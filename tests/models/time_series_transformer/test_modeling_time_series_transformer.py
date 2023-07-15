@@ -114,7 +114,7 @@ class TimeSeriesTransformerModelTester:
 
         past_time_features = floats_tensor([self.batch_size, _past_length, config.num_time_features])
         past_values = floats_tensor([self.batch_size, _past_length])
-        past_observed_mask = floats_tensor([self.batch_size, _past_length])
+        past_observed_mask = floats_tensor([self.batch_size, _past_length]) > 0.5
 
         # decoder inputs
         future_time_features = floats_tensor([self.batch_size, config.prediction_length, config.num_time_features])
@@ -459,7 +459,7 @@ class TimeSeriesTransformerModelTest(ModelTesterMixin, PipelineTesterMixin, unit
 
 
 def prepare_batch(filename="train-batch.pt"):
-    file = hf_hub_download(repo_id="kashif/tourism-monthly-batch", filename=filename, repo_type="dataset")
+    file = hf_hub_download(repo_id="hf-internal-testing/tourism-monthly-batch", filename=filename, repo_type="dataset")
     batch = torch.load(file, map_location=torch_device)
     return batch
 
