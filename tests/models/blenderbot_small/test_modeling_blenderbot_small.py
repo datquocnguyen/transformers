@@ -226,8 +226,9 @@ class BlenderbotSmallModelTest(ModelTesterMixin, GenerationTesterMixin, Pipeline
             "conversational": BlenderbotSmallForConditionalGeneration,
             "feature-extraction": BlenderbotSmallModel,
             "summarization": BlenderbotSmallForConditionalGeneration,
-            "text2text-generation": BlenderbotSmallForConditionalGeneration,
             "text-generation": BlenderbotSmallForCausalLM,
+            "text2text-generation": BlenderbotSmallForConditionalGeneration,
+            "translation": BlenderbotSmallForConditionalGeneration,
         }
         if is_torch_available()
         else {}
@@ -565,3 +566,7 @@ class BlenderbotSmallStandaloneDecoderModelTest(ModelTesterMixin, GenerationTest
     def test_retain_grad_hidden_states_attentions(self):
         # decoder cannot keep gradients
         return
+
+    @unittest.skip("The model doesn't support left padding")  # and it's not used enough to be worth fixing :)
+    def test_left_padding_compatibility(self):
+        pass

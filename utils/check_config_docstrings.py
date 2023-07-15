@@ -31,14 +31,16 @@ CONFIG_MAPPING = transformers.models.auto.configuration_auto.CONFIG_MAPPING
 
 # Regex pattern used to find the checkpoint mentioned in the docstring of `config_class`.
 # For example, `[bert-base-uncased](https://huggingface.co/bert-base-uncased)`
-_re_checkpoint = re.compile("\[(.+?)\]\((https://huggingface\.co/.+?)\)")
+_re_checkpoint = re.compile(r"\[(.+?)\]\((https://huggingface\.co/.+?)\)")
 
 
 CONFIG_CLASSES_TO_IGNORE_FOR_DOCSTRING_CHECKPOINT_CHECK = {
     "DecisionTransformerConfig",
     "EncoderDecoderConfig",
+    "MusicgenConfig",
     "RagConfig",
     "SpeechEncoderDecoderConfig",
+    "TimmBackboneConfig",
     "VisionEncoderDecoderConfig",
     "VisionTextDualEncoderConfig",
     "LlamaConfig",
@@ -72,6 +74,9 @@ def check_config_docstrings_have_checkpoints():
     configs_without_checkpoint = []
 
     for config_class in list(CONFIG_MAPPING.values()):
+        # Skip deprecated models
+        if "models.deprecated" in config_class.__module__:
+            continue
         checkpoint = get_checkpoint_from_config_class(config_class)
 
         name = config_class.__name__

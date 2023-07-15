@@ -17,7 +17,7 @@ import unittest
 import numpy as np
 import pytest
 from datasets import load_dataset
-from huggingface_hub import snapshot_download
+from huggingface_hub import hf_hub_download, snapshot_download
 
 from transformers import (
     MODEL_FOR_CTC_MAPPING,
@@ -39,6 +39,7 @@ from transformers.testing_utils import (
     require_pyctcdecode,
     require_tf,
     require_torch,
+    require_torch_gpu,
     require_torchaudio,
     slow,
 )
@@ -315,6 +316,27 @@ class AutomaticSpeechRecognitionPipelineTests(unittest.TestCase):
                 "chunks": [{"text": " Conquered returned to its place amidst the tents.", "timestamp": (0.0, 3.36)}],
             },
         )
+        pipe.model.generation_config.alignment_heads = [[2, 2], [3, 0], [3, 2], [3, 3], [3, 4], [3, 5]]
+        res = pipe(sample["audio"]["array"], return_timestamps="word")
+        # fmt: off
+        # Note that the word-level timestamps predicted here are pretty bad.
+        self.assertEqual(
+            res,
+            {
+                "text": " Conquered returned to its place amidst the tents.",
+                "chunks": [
+                    {'text': ' Conquered', 'timestamp': (29.78, 29.9)},
+                    {'text': ' returned', 'timestamp': (29.9, 29.9)},
+                    {'text': ' to', 'timestamp': (29.9, 29.9)},
+                    {'text': ' its', 'timestamp': (29.9, 29.9)},
+                    {'text': ' place', 'timestamp': (29.9, 29.9)},
+                    {'text': ' amidst', 'timestamp': (29.9, 29.9)},
+                    {'text': ' the', 'timestamp': (29.9, 29.9)},
+                    {'text': ' tents.', 'timestamp': (29.9, 29.9)}
+                ]
+            }
+        )
+        # fmt: on
 
     @require_torch
     @slow
@@ -698,6 +720,35 @@ class AutomaticSpeechRecognitionPipelineTests(unittest.TestCase):
                 ],
             },
         )
+        speech_recognizer.model.generation_config.alignment_heads = [[2, 2], [3, 0], [3, 2], [3, 3], [3, 4], [3, 5]]
+        output = speech_recognizer(filename, return_timestamps="word")
+        # fmt: off
+        self.assertEqual(
+            output,
+            {
+                "text": " Mr. Quilter is the apostle of the middle classes, and we are glad to welcome his gospel.",
+                "chunks": [
+                    {'text': ' Mr.', 'timestamp': (0.0, 1.02)},
+                    {'text': ' Quilter', 'timestamp': (1.02, 1.18)},
+                    {'text': ' is', 'timestamp': (1.18, 1.44)},
+                    {'text': ' the', 'timestamp': (1.44, 1.58)},
+                    {'text': ' apostle', 'timestamp': (1.58, 1.98)},
+                    {'text': ' of', 'timestamp': (1.98, 2.3)},
+                    {'text': ' the', 'timestamp': (2.3, 2.46)},
+                    {'text': ' middle', 'timestamp': (2.46, 2.56)},
+                    {'text': ' classes,', 'timestamp': (2.56, 3.38)},
+                    {'text': ' and', 'timestamp': (3.38, 3.52)},
+                    {'text': ' we', 'timestamp': (3.52, 3.6)},
+                    {'text': ' are', 'timestamp': (3.6, 3.72)},
+                    {'text': ' glad', 'timestamp': (3.72, 4.0)},
+                    {'text': ' to', 'timestamp': (4.0, 4.26)},
+                    {'text': ' welcome', 'timestamp': (4.26, 4.54)},
+                    {'text': ' his', 'timestamp': (4.54, 4.92)},
+                    {'text': ' gospel.', 'timestamp': (4.92, 6.66)},
+                ],
+            },
+        )
+        # fmt: on
 
     @slow
     @require_torch
@@ -1157,6 +1208,36 @@ class AutomaticSpeechRecognitionPipelineTests(unittest.TestCase):
         # 2nd arange
         output = speech_recognizer({"raw": waveform, "stride": (1000, 8000), "sampling_rate": 16_000})
         self.assertEqual(output, {"text": "XB"})
+
+    @slow
+    @require_torch_gpu
+    def test_slow_unfinished_sequence(self):
+        from transformers import GenerationConfig
+
+        pipe = pipeline(
+            "automatic-speech-recognition",
+            model="vasista22/whisper-hindi-large-v2",
+            device="cuda:0",
+        )
+        # Original model wasn't trained with timestamps and has incorrect generation config
+        pipe.model.generation_config = GenerationConfig.from_pretrained("openai/whisper-large-v2")
+
+        audio = hf_hub_download("Narsil/asr_dummy", filename="hindi.ogg", repo_type="dataset")
+
+        out = pipe(
+            audio,
+            return_timestamps=True,
+        )
+        self.assertEqual(
+            out,
+            {
+                "chunks": [
+                    {"text": "", "timestamp": (18.94, 0.0)},
+                    {"text": "मिर्ची में कितने विभिन्न प्रजातियां हैं", "timestamp": (None, None)},
+                ],
+                "text": "मिर्ची में कितने विभिन्न प्रजातियां हैं",
+            },
+        )
 
 
 def require_ffmpeg(test_case):

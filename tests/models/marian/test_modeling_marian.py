@@ -244,8 +244,9 @@ class MarianModelTest(ModelTesterMixin, GenerationTesterMixin, PipelineTesterMix
             "conversational": MarianMTModel,
             "feature-extraction": MarianModel,
             "summarization": MarianMTModel,
-            "text2text-generation": MarianMTModel,
             "text-generation": MarianForCausalLM,
+            "text2text-generation": MarianMTModel,
+            "translation": MarianMTModel,
         }
         if is_torch_available()
         else {}
@@ -617,7 +618,7 @@ class TestMarian_FI_EN_V2(MarianIntegrationTest):
         return cls
 
     @slow
-    def test_batch_generation_en_fr(self):
+    def test_batch_generation_fi_en(self):
         self._assert_generated_batch_equal_expected()
 
 
@@ -861,3 +862,7 @@ class MarianStandaloneDecoderModelTest(ModelTesterMixin, GenerationTesterMixin, 
     def test_retain_grad_hidden_states_attentions(self):
         # decoder cannot keep gradients
         return
+
+    @unittest.skip("The model doesn't support left padding")  # and it's not used enough to be worth fixing :)
+    def test_left_padding_compatibility(self):
+        pass

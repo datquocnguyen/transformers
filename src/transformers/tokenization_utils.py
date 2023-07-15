@@ -834,7 +834,7 @@ class PreTrainedTokenizer(PreTrainedTokenizerBase):
                 Whether or not the input is already pre-tokenized (e.g., split into words). If set to `True`, the
                 tokenizer assumes the input is already split into words (for instance, by splitting it on whitespace)
                 which it will tokenize. This is useful for NER or token classification.
-            kwargs:
+            kwargs (`Dict[str, Any]`, *optional*):
                 Keyword arguments to use for the tokenization.
 
         Returns:
@@ -922,7 +922,7 @@ class PreTrainedTokenizer(PreTrainedTokenizerBase):
         self,
         token_ids: List[int],
         skip_special_tokens: bool = False,
-        clean_up_tokenization_spaces: bool = True,
+        clean_up_tokenization_spaces: bool = None,
         spaces_between_special_tokens: bool = True,
         **kwargs,
     ) -> str:
@@ -953,6 +953,11 @@ class PreTrainedTokenizer(PreTrainedTokenizerBase):
         else:
             text = "".join(sub_texts)
 
+        clean_up_tokenization_spaces = (
+            clean_up_tokenization_spaces
+            if clean_up_tokenization_spaces is not None
+            else self.clean_up_tokenization_spaces
+        )
         if clean_up_tokenization_spaces:
             clean_text = self.clean_up_tokenization(text)
             return clean_text

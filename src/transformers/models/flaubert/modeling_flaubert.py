@@ -16,7 +16,6 @@
 
 import itertools
 import math
-import random
 from dataclasses import dataclass
 from typing import Dict, Optional, Tuple, Union
 
@@ -172,7 +171,8 @@ class MultiHeadAttention(nn.Module):
                     k, v = cache[self.layer_id]
             cache[self.layer_id] = (k, v)
 
-        scores = torch.matmul(q, k.transpose(2, 3)) / math.sqrt(dim_per_head)  # (bs, n_heads, qlen, klen)
+        q = q / math.sqrt(dim_per_head)  # (bs, n_heads, qlen, dim_per_head)
+        scores = torch.matmul(q, k.transpose(2, 3))  # (bs, n_heads, qlen, klen)
         mask = (mask == 0).view(mask_reshape).expand_as(scores)  # (bs, n_heads, qlen, klen)
         scores.masked_fill_(mask, torch.finfo(scores.dtype).min)  # (bs, n_heads, qlen, klen)
 
@@ -378,8 +378,6 @@ class FlaubertPreTrainedModel(PreTrainedModel):
 
 
 class FlaubertModel(FlaubertPreTrainedModel):
-    _keys_to_ignore_on_load_missing = [r"position_ids"]
-
     def __init__(self, config):  # , dico, is_encoder, with_output):
         super().__init__(config)
 
@@ -448,7 +446,6 @@ class FlaubertModel(FlaubertPreTrainedModel):
 
         # Initialize weights and apply final processing
         self.post_init()
-        self.register_buffer("position_ids", torch.arange(config.max_position_embeddings).expand((1, -1)))
 
         self.layerdrop = getattr(config, "layerdrop", 0.0)
         self.pre_norm = getattr(config, "pre_norm", False)
@@ -579,9 +576,10 @@ class FlaubertModel(FlaubertPreTrainedModel):
         attentions = () if output_attentions else None
         for i in range(self.n_layers):
             # LayerDrop
-            dropout_probability = random.uniform(0, 1)
-            if self.training and (dropout_probability < self.layerdrop):
-                continue
+            if self.training:
+                dropout_probability = torch.rand([])
+                if dropout_probability < self.layerdrop:
+                    continue
 
             if output_hidden_states:
                 hidden_states = hidden_states + (tensor,)
@@ -653,7 +651,7 @@ class FlaubertModel(FlaubertPreTrainedModel):
 )
 # Copied transformers.models.xlm.modeling_xlm.XLMWithLMHeadModel with XLM_INPUTS->FLAUBERT_INPUTS,XLM->Flaubert
 class FlaubertWithLMHeadModel(FlaubertPreTrainedModel):
-    _keys_to_ignore_on_load_missing = ["pred_layer.proj.weight"]
+    _tied_weights_keys = ["pred_layer.proj.weight"]
 
     def __init__(self, config):
         super().__init__(config)

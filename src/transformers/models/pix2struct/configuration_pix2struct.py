@@ -35,17 +35,16 @@ class Pix2StructTextConfig(PretrainedConfig):
     r"""
     This is the configuration class to store the configuration of a [`Pix2StructTextModel`]. It is used to instantiate
     a Pix2Struct text model according to the specified arguments, defining the model architecture. Instantiating a
-    configuration with the defaults will yield a similar configuration to that of the `Pix2StructText` used by the
-    [base architectures](https://huggingface.co/google/pix2struct-textcaps-base).
+    configuration with the defaults will yield a similar configuration to that of the Pix2Struct text decoder used by
+    the [google/pix2struct-base](https://huggingface.co/google/pix2struct-base) architecture.
 
     Configuration objects inherit from [`PretrainedConfig`] and can be used to control the model outputs. Read the
     documentation from [`PretrainedConfig`] for more information.
 
-
     Args:
         vocab_size (`int`, *optional*, defaults to 50244):
             Vocabulary size of the `Pix2Struct` text model. Defines the number of different tokens that can be
-            represented by the `inputs_ids` passed when calling [`Pix2StructModel`].
+            represented by the `inputs_ids` passed when calling [`Pix2StructTextModel`].
         hidden_size (`int`, *optional*, defaults to 768):
             Dimensionality of the encoder layers and the pooler layer.
         d_kv (`int`, *optional*, defaults to 64):
@@ -83,10 +82,10 @@ class Pix2StructTextConfig(PretrainedConfig):
     ```python
     >>> from transformers import Pix2StructTextConfig, Pix2StructTextModel
 
-    >>> # Initializing a Pix2StructTextConfig with Salesforce/pix2struct-vqa-base style configuration
+    >>> # Initializing a Pix2StructTextConfig with google/pix2struct-base style configuration
     >>> configuration = Pix2StructTextConfig()
 
-    >>> # Initializing a Pix2StructTextModel (with random weights) from the Salesforce/pix2struct-vqa-base style configuration
+    >>> # Initializing a Pix2StructTextModel (with random weights) from the google/pix2struct-base style configuration
     >>> model = Pix2StructTextModel(configuration)
 
     >>> # Accessing the model configuration
@@ -118,6 +117,8 @@ class Pix2StructTextConfig(PretrainedConfig):
         use_cache=False,
         pad_token_id=0,
         eos_token_id=1,
+        tie_word_embeddings=False,
+        is_decoder=True,
         **kwargs,
     ):
         self.vocab_size = vocab_size
@@ -143,6 +144,8 @@ class Pix2StructTextConfig(PretrainedConfig):
             pad_token_id=pad_token_id,
             eos_token_id=eos_token_id,
             decoder_start_token_id=decoder_start_token_id,
+            tie_word_embeddings=tie_word_embeddings,
+            is_decoder=is_decoder,
             **kwargs,
         )
 
@@ -150,6 +153,8 @@ class Pix2StructTextConfig(PretrainedConfig):
     def from_pretrained(
         cls, pretrainehidden_size_name_or_path: Union[str, os.PathLike], **kwargs
     ) -> "PretrainedConfig":
+        cls._set_token_in_kwargs(kwargs)
+
         config_dict, kwargs = cls.get_config_dict(pretrainehidden_size_name_or_path, **kwargs)
 
         # get the text config dict if we are loading from Pix2StructConfig
@@ -168,13 +173,12 @@ class Pix2StructTextConfig(PretrainedConfig):
 class Pix2StructVisionConfig(PretrainedConfig):
     r"""
     This is the configuration class to store the configuration of a [`Pix2StructVisionModel`]. It is used to
-    instantiate a PIX2STRUCT vision model according to the specified arguments, defining the model architecture.
+    instantiate a Pix2Struct vision model according to the specified arguments, defining the model architecture.
     Instantiating a configuration defaults will yield a similar configuration to that of the Pix2Struct-base
-    [Salesforce/pix2struct-vqa-base](https://huggingface.co/Salesforce/pix2struct-vqa-base) architecture.
+    [google/pix2struct-base](https://huggingface.co/google/pix2struct-base) architecture.
 
     Configuration objects inherit from [`PretrainedConfig`] and can be used to control the model outputs. Read the
     documentation from [`PretrainedConfig`] for more information.
-
 
     Args:
         hidden_size (`int`, *optional*, defaults to 768):
@@ -185,16 +189,10 @@ class Pix2StructVisionConfig(PretrainedConfig):
             Dimensionality of the "intermediate" (i.e., feed-forward) layer in the Transformer encoder.
         d_kv (`int`, *optional*, defaults to 64):
             Dimensionality of the key, query, value projections per attention head.
-        projection_dim (`int`, *optional*, defaults to 768):
-            Dimensionality of the projection layer in the Transformer encoder.
         num_hidden_layers (`int`, *optional*, defaults to 12):
             Number of hidden layers in the Transformer encoder.
         num_attention_heads (`int`, *optional*, defaults to 12):
             Number of attention heads for each attention layer in the Transformer encoder.
-        num_channels (`int`, *optional*, defaults to 3):
-            Number of channels of the input images.
-        patch_size (`int`, *optional*, defaults to 16):
-            The size (resolution) of each patch.
         dense_act_fn (`str` or `function`, *optional*, defaults to `"gelu_new"`):
             The non-linear activation function (function or string) in the encoder and pooler. If string, `"gelu"`,
             `"relu"`, `"selu"` and `"gelu_new"` ``"gelu"` are supported.
@@ -211,8 +209,6 @@ class Pix2StructVisionConfig(PretrainedConfig):
             testing).
         seq_len (`int`, *optional*, defaults to 4096):
             Maximum sequence length (here number of patches) supported by the model.
-        layer_norm_bias (`bool`, *optional*, defaults to `False`):
-            Whether or not to add a bias to the layer normalization layers.
         relative_attention_num_buckets (`int`, *optional*, defaults to 32):
             The number of buckets to use for each attention layer.
         relative_attention_max_distance (`int`, *optional*, defaults to 128):
@@ -223,10 +219,10 @@ class Pix2StructVisionConfig(PretrainedConfig):
     ```python
     >>> from transformers import Pix2StructVisionConfig, Pix2StructVisionModel
 
-    >>> # Initializing a Pix2StructVisionConfig with Salesforce/pix2struct-vqa-base style configuration
+    >>> # Initializing a Pix2StructVisionConfig with google/pix2struct-base style configuration
     >>> configuration = Pix2StructVisionConfig()
 
-    >>> # Initializing a Pix2StructVisionModel (with random weights) from the Salesforce/pix2struct-vqa-base style configuration
+    >>> # Initializing a Pix2StructVisionModel (with random weights) from the google/pix2struct-base style configuration
     >>> model = Pix2StructVisionModel(configuration)
 
     >>> # Accessing the model configuration
@@ -241,11 +237,8 @@ class Pix2StructVisionConfig(PretrainedConfig):
         patch_embed_hidden_size=768,
         d_ff=2048,
         d_kv=64,
-        projection_dim=768,
         num_hidden_layers=12,
         num_attention_heads=12,
-        num_channels=3,
-        patch_size=16,
         dense_act_fn="gelu_new",
         layer_norm_eps=1e-6,
         dropout_rate=0.0,
@@ -253,7 +246,6 @@ class Pix2StructVisionConfig(PretrainedConfig):
         initializer_range=1e-10,
         initializer_factor=1.0,
         seq_len=4096,
-        layer_norm_bias=False,
         relative_attention_num_buckets=32,
         relative_attention_max_distance=128,
         **kwargs,
@@ -263,19 +255,15 @@ class Pix2StructVisionConfig(PretrainedConfig):
         self.hidden_size = hidden_size
         self.patch_embed_hidden_size = patch_embed_hidden_size
         self.d_ff = d_ff
-        self.projection_dim = projection_dim
         self.dropout_rate = dropout_rate
         self.num_hidden_layers = num_hidden_layers
         self.num_attention_heads = num_attention_heads
-        self.num_channels = num_channels
-        self.patch_size = patch_size
         self.initializer_range = initializer_range
         self.initializer_factor = initializer_factor
         self.attention_dropout = attention_dropout
         self.layer_norm_eps = layer_norm_eps
         self.dense_act_fn = dense_act_fn
         self.seq_len = seq_len
-        self.layer_norm_bias = layer_norm_bias
         self.relative_attention_num_buckets = relative_attention_num_buckets
         self.relative_attention_max_distance = relative_attention_max_distance
         self.d_kv = d_kv
@@ -284,6 +272,8 @@ class Pix2StructVisionConfig(PretrainedConfig):
     def from_pretrained(
         cls, pretrainehidden_size_name_or_path: Union[str, os.PathLike], **kwargs
     ) -> "PretrainedConfig":
+        cls._set_token_in_kwargs(kwargs)
+
         config_dict, kwargs = cls.get_config_dict(pretrainehidden_size_name_or_path, **kwargs)
 
         # get the vision config dict if we are loading from Pix2StructConfig
@@ -301,11 +291,11 @@ class Pix2StructVisionConfig(PretrainedConfig):
 
 class Pix2StructConfig(PretrainedConfig):
     r"""
-    [`Pix2StructConfig`] is the configuration class to store the configuration of a [`Pix2StructModel`]. It is used to
-    instantiate a PIX2STRUCT model according to the specified arguments, defining the text model and vision model
-    configs. Instantiating a configuration with the defaults will yield a similar configuration to that of the
-    PIX2STRUCT-base [Salesforce/pix2struct-vqa-base](https://huggingface.co/Salesforce/pix2struct-vqa-base)
-    architecture.
+    [`Pix2StructConfig`] is the configuration class to store the configuration of a
+    [`Pix2StructForConditionalGeneration`]. It is used to instantiate a Pix2Struct model according to the specified
+    arguments, defining the text model and vision model configs. Instantiating a configuration with the defaults will
+    yield a similar configuration to that of the Pix2Struct-base
+    [google/pix2struct-base](https://huggingface.co/google/pix2struct-base) architecture.
 
     Configuration objects inherit from [`PretrainedConfig`] and can be used to control the model outputs. Read the
     documentation from [`PretrainedConfig`] for more information.
@@ -327,20 +317,20 @@ class Pix2StructConfig(PretrainedConfig):
     Example:
 
     ```python
-    >>> from transformers import Pix2StructConfig, Pix2StructModel
+    >>> from transformers import Pix2StructConfig, Pix2StructForConditionalGeneration
 
-    >>> # Initializing a Pix2StructConfig with Salesforce/pix2struct-vqa-base style configuration
+    >>> # Initializing a Pix2StructConfig with google/pix2struct-base style configuration
     >>> configuration = Pix2StructConfig()
 
-    >>> # Initializing a Pix2StructPModel (with random weights) from the Salesforce/pix2struct-vqa-base style configuration
-    >>> model = Pix2StructModel(configuration)
+    >>> # Initializing a Pix2StructForConditionalGeneration (with random weights) from the google/pix2struct-base style configuration
+    >>> model = Pix2StructForConditionalGeneration(configuration)
 
     >>> # Accessing the model configuration
     >>> configuration = model.config
 
     >>> # We can also initialize a Pix2StructConfig from a Pix2StructTextConfig and a Pix2StructVisionConfig
 
-    >>> # Initializing a PIX2STRUCTText and PIX2STRUCTVision configuration
+    >>> # Initializing a Pix2Struct text and Pix2Struct vision configuration
     >>> config_text = Pix2StructTextConfig()
     >>> config_vision = Pix2StructVisionConfig()
 
@@ -357,9 +347,11 @@ class Pix2StructConfig(PretrainedConfig):
         initializer_factor=1.0,
         initializer_range=0.02,
         is_vqa=False,
+        tie_word_embeddings=False,
+        is_encoder_decoder=True,
         **kwargs,
     ):
-        super().__init__(**kwargs)
+        super().__init__(tie_word_embeddings=tie_word_embeddings, is_encoder_decoder=is_encoder_decoder, **kwargs)
 
         if text_config is None:
             text_config = {}
@@ -372,9 +364,9 @@ class Pix2StructConfig(PretrainedConfig):
         self.text_config = Pix2StructTextConfig(**text_config)
         self.vision_config = Pix2StructVisionConfig(**vision_config)
 
-        self.text_config.encoder_hidden_size = self.vision_config.hidden_size
         self.decoder_start_token_id = self.text_config.decoder_start_token_id
         self.pad_token_id = self.text_config.pad_token_id
+        self.eos_token_id = self.text_config.eos_token_id
 
         self.initializer_factor = initializer_factor
         self.initializer_range = initializer_range
